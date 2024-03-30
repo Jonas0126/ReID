@@ -22,38 +22,35 @@ if not os.path.exists(args.save_dir):
 
 
 id = 0
-img_num = 0
+
 files = os.listdir(args.image_dir)
 
 save_img_path = os.path.join(args.save_dir, "images")
-save_label_path = os.path.join(args.save_dir, "label")
+
 
 if not os.path.isdir(save_img_path):
     os.mkdir(save_img_path)
-if not os.path.isdir(save_label_path):
-    os.mkdir(save_label_path)
+
 
 for file in tqdm(files, dynamic_ncols=True):
     file_path = os.path.join(args.image_dir, file)
     images = os.listdir(file_path)
      
-    start_img_num = img_num
-    label_file = open(f"{save_label_path}/{id}.txt", "w")
-    label_file.write(f"{start_img_num} ")
+    i = 0
+    save_path = os.path.join(save_img_path, f'{id}/')
+    if not os.path.isdir(save_path):
+        os.mkdir(save_path)
 
     for img in images:
         
-        img_drc = os.path.join(save_img_path, f'{img_num}.jpg')
+        img_drc = os.path.join(save_path, f'{i}.jpg')
         img_src = os.path.join(file_path, img)
         
         shutil.copyfile(img_src,img_drc)
-        
-        img_num += 1
+        i+=1
 
-    end_img_num = img_num-1
 
-    label_file.write(f"{end_img_num}")
-    label_file.close()
+
     id += 1
 
 

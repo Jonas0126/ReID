@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
         super().__init__()
@@ -51,7 +52,7 @@ class ResBlock(nn.Module):
         return h
     
 class ResNet(nn.Module):
-    def __init__(self, no_block, classes_num, in_channels=3):
+    def __init__(self, no_block, in_channels=3):
         super().__init__()
         out_features = [256, 512, 1024, 2048]
         
@@ -66,9 +67,8 @@ class ResNet(nn.Module):
         self.conv1 = Conv(in_channels, 64, 7, 2, 3)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.fc = nn.Linear(2048, classes_num)
         self.relu = nn.ReLU()
-        
+        self.bn = nn.BatchNorm2d(out_features[-1])
     def forward(self, x):
         x = self.relu(self.conv1(x))
         x = self.maxpool(x)
@@ -77,21 +77,17 @@ class ResNet(nn.Module):
             x = block(x)
 
         x = self.avgpool(x)
+        x = self.bn(x)
         embedding = torch.flatten(x, 1)
-        output = self.fc(embedding)
-        return embedding, output
+        return embedding
     
 
     
 if __name__ == '__main__':
-    model = ResNet([3, 4, 23, 3], 1024)
+
+    model = ResNet([3, 4, 23, 3])
     print(model)
 
-    input = torch.randn(32, 3, 224, 224)
+    
 
-    feature, classes = model(input)
-    print(f"feature : {feature}")
-    print(f"feature shape : {feature.shape}")
-
-    print(f'classes : {classes}')
-    print(f'classes shape : {classes.shape}') 
+    

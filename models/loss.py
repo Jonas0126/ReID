@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import sys
-
+import torch.nn.functional as F
 
 class tripletLoss(nn.Module):
     def __init__(self, feature_set, pic_num=4, margin=1):
@@ -16,43 +16,50 @@ class tripletLoss(nn.Module):
         
         triplet_loss = 0
         for i in range(self.row):
-            
-            id = i // self.pic_num
-            positive_mask = torch.zeros(self.row).to('cuda')
-            positive_mask[id*4:id*4+4] = 1
-            
-            negative_mask = torch.ones(self.row).to('cuda')
-            negative_mask -= positive_mask
-            
-            positive = (dist_matrix[i].mul(positive_mask)).max()
 
-            temp = dist_matrix[i].mul(negative_mask)
-            try:
-                negative = temp[temp > 0].min() #過濾0值
-            except:
-                print(f'dist between feature : {temp}')
+            id = i // self.pic_num
+            positive_mask = torch.zeros(self.row).to('cpu')
+            positive_mask[id*self.pic_num : id*self.pic_num+self.pic_num] = 1
+
+            negative_mask = torch.ones(self.row).to('cpu')
+            negative_mask -= positive_mask
+
+            positive = (dist_matrix[i].mul(positive_mask))[id*self.pic_num : id*self.pic_num+self.pic_num].min()
+            negative = dist_matrix[i].mul(negative_mask).max()
+
             loss = max((positive - negative + self.margin), 0)
             # triplet_loss.append(loss)
             triplet_loss += loss
-
+        if triplet_loss == 0:
+            print(f'loss is 0')
+            return torch.tensor(0.0,requires_grad=True)
         return triplet_loss
 
 
-#compute eucliden dist
+#compute cos dist
 def compute_dist(x):
-    x_len= len(x)
-    x_sqr = torch.pow(x, 2).sum(1, keepdim=True).expand(x_len, x_len)
     
+    x_len= len(x)
+    dist_matrix = torch.empty((x_len, x_len))
+    for i in range(x_len):
+        for j in range(i, x_len):    
 
-    dist = x_sqr + x_sqr.t()
-    dist.addmm(1, -2, x, x.t())
-    dist = dist.clamp(min=1e-12).sqrt()
+            dist_matrix[i][j] = dist_matrix[j][i] = F.cosine_similarity(x[i], x[j], dim=0)
 
-    return dist
+    return dist_matrix
 
 if __name__ == '__main__':
-    x = torch.rand((12,4)).to('cuda')
+    x = torch.rand((8,4)).to('cuda')
     print(f'x = {x}')
 
-    triploss = tripletLoss(x)
+    dist_m = compute_dist(x)
+    print(f'dist_m = {dist_m}')
+    positive_mask = torch.zeros(8)
+    positive_mask[0 : 2] = 1
+    print(f'positive mask : {positive_mask}')
+    positive = (dist_m[0].mul(positive_mask))
+    print(f'positive : {positive}')
+    positive = positive[0:2].min()
+    print(f'positive : {positive}')
+    triploss = tripletLoss(x, 2)
     print(triploss(x))
