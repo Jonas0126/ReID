@@ -15,6 +15,27 @@ class tripletLoss(nn.Module):
         dist_matrix = compute_dist(x)
         
         triplet_loss = 0
+        non_zero_num = 0
+        for i in range(self.row):
+            id = i // self.pic_num
+
+            for j in range(i, self.row):
+                if id == j//self.pic_num:
+                    loss = 1 - dist_matrix[i, j]
+                    if loss != 0:
+                        non_zero_num += 1
+                    triplet_loss += loss
+                else:
+                    loss = max(0, dist_matrix[i][j]-self.margin)
+                    if loss != 0:
+                        non_zero_num += 1
+                    triplet_loss += loss
+            
+        triplet_loss /= non_zero_num
+        if triplet_loss == 0:
+            print(f'loss is 0')
+            return torch.tensor(0.0,requires_grad=True)
+        '''
         for i in range(self.row):
 
             id = i // self.pic_num
@@ -33,6 +54,7 @@ class tripletLoss(nn.Module):
         if triplet_loss == 0:
             print(f'loss is 0')
             return torch.tensor(0.0,requires_grad=True)
+        '''
         return triplet_loss
 
 

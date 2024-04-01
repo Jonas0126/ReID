@@ -30,12 +30,12 @@ class VeRIWildDataset(Dataset):
         
 
         img_path = os.path.join(self.img_dir,f'{label}', f'{img_idx}.jpg')
-        img = read_image(img_path)
+        img = read_image(img_path).to(torch.float32) / 255
         
         if self.transform is not None:
             img = self.transform(img)
 
-        return img.to(torch.float32), label
+        return img, label
 
 
 

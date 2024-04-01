@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from torchvision.models import resnet101, ResNet101_Weights
 
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
@@ -50,6 +50,20 @@ class ResBlock(nn.Module):
 
         h = self.relu(torch.add(f, x))
         return h
+
+
+class PretrainedResNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # out_features = [256, 512, 1024, 2048]
+        self.head = resnet101(weights=ResNet101_Weights.IMAGENET1K_V1)
+        self.head.fc = nn.Identity()
+
+        self.bn = nn.BatchNorm1d(2048)
+    def forward(self, x):
+        x = self.head(x)
+        x0 = self.bn(x)
+        return x0
     
 class ResNet(nn.Module):
     def __init__(self, no_block, in_channels=3):
