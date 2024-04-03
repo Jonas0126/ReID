@@ -1,9 +1,9 @@
 #! /bin/bash
 
-lr=(0.001 0.0003 0.0001)
-margin=(0.6 0.3 0 -0.2)
-width=(224 256 300)
-batch=(32)
+lr=(0.001)
+margin=(0.3 0 -0.2)
+width=(256)
+batch=(64)
 name=0
 for ((i=0; i < ${#lr[@]}; i++))
 do
@@ -22,4 +22,4 @@ do
         done
     done
 
-done    
+done       

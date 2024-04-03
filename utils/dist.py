@@ -15,7 +15,7 @@ def compute_dist(x, e=1e-12):
     return dist
 '''
 
-def compute_dist(x):
+def compute_dist_sqr(x):
     
     x_len= len(x)
     dist_matrix = torch.empty((x_len, x_len))
@@ -26,7 +26,19 @@ def compute_dist(x):
 
     return dist_matrix
 
+def compute_dist_rect(x, y):
+    y_len = len(y)
+    x_len= len(x)
+    dist_matrix = torch.empty((x_len, y_len))
+    for i in range(x_len):
+        for j in range(y_len):    
+
+            dist_matrix[i][j] = F.cosine_similarity(x[i], y[j], dim=0)
+
+    return dist_matrix
+
 if __name__ == '__main__':
-    x = torch.randint(1,8,(12,4))
-    dist_matrix = compute_dist(x, 0)
-    print(f'dist matrix : {dist_matrix}')
+    x = torch.rand(12,4)
+    y = torch.rand(20,4)
+    dist_matrix = compute_dist_rect(x, y)
+    print(f'dist matrix : {dist_matrix.shape}')

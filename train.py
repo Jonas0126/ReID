@@ -7,8 +7,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from utils.draw_loss import draw_loss, draw_acc 
 from utils.dist import *
+from utils.find_knn import top_k
 import os
 import torch
+from terminaltables import AsciiTable
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -20,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', '-e', default=100,type=int)
     parser.add_argument('--batch', '-b', default=32, type=int)  
     parser.add_argument('--learning_rate', '-lr', default=0.01, type=float)
-    parser.add_argument('--knn', '-k', default=3, type=int)
+    parser.add_argument('--knn', '-k', default=[1,3,5], type=list)
     parser.add_argument('--width', '-w', default=256, type=int)
     parser.add_argument('--train_pic_num', default=4,type=int)
     parser.add_argument('--test_pic_num', default=10,type=int)
@@ -33,7 +35,6 @@ if __name__ == '__main__':
         print(f'{args.train_image_dir} does not exist.')
         exit()
 
-    
     if not os.path.exists(args.test_image_dir):
         print(f'{args.test_image_dir} does not exist.')
         exit()
@@ -43,148 +44,151 @@ if __name__ == '__main__':
         os.mkdir(f'{save_dir}')
 
 
-train_classes_num = len(os.listdir(args.train_image_dir))
-test_classes_num = len(os.listdir(args.test_image_dir))
-print(f'trains classes : {train_classes_num}')
-print(f'test classes : {test_classes_num}')
+    train_classes_num = len(os.listdir(args.train_image_dir))
+    test_classes_num = len(os.listdir(args.test_image_dir))
+    print(f'trains classes : {train_classes_num}')
+    print(f'test classes : {test_classes_num}')
 
-epochs = args.epochs
-k = args.knn
-width = args.width
-#num of block in ResNet
-no_block = args.block
+    epochs = args.epochs
+    k = args.knn
+    width = args.width
+    no_block = args.block #num of block in ResNet
 
-#log parameter
-f = open(f'{save_dir}/{args.model_name}.txt', 'w')
-f.write(f'lr : {args.learning_rate}, epochs : {args.epochs}, batch size : {args.batch}, image width : {args.width}, margin : {args.margin}\n')
+    #log parameter
+    f = open(f'{save_dir}/{args.model_name}_log.txt', 'w')
+    f.write(f'lr : {args.learning_rate}, epochs : {args.epochs}, batch size : {args.batch}, image width : {args.width}, margin : {args.margin}\n')
 
-#define transform for train dataset
-trans = transforms.Compose([
-    transforms.Resize((width, width)),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    # transforms.ColorJitter(brightness=0.5),
-    transforms.RandomHorizontalFlip(),
-    # transforms.RandomVerticalFlip(p=0.4),
-    transforms.RandomErasing(p=0.4)
-])
+    #define transform for dataset
+    train_transform = transforms.Compose([
+        transforms.Resize((width, width)),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        # transforms.ColorJitter(brightness=0.5),
+        transforms.RandomHorizontalFlip(),
+        # transforms.RandomVerticalFlip(p=0.4),
+        transforms.RandomErasing(p=0.4)
+    ])
 
-
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print(f'training on {device}')
-
-#Instantiate the model
-feature_extractor = PretrainedResNet()
-feature_extractor = feature_extractor.to(device)
+    test_transform = transforms.Compose([
+        transforms.Resize((width, width)),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
 
 
-for name, param in feature_extractor.named_parameters():
-    if 'layer1' in name or 'layer3' in name or 'layer2' in name:
-        param.requires_grad = False
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'training on {device}')
 
-
-#load train data
-train_set = VeRIWildDataset(trans, args.train_image_dir, 1024, args.train_pic_num) 
-train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
-
-#load test data
-test_set = VeRIWildDataset(transforms.Resize((width, width)), args.test_image_dir, 100, args.test_pic_num)
-test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
-
-img_list = torch.empty((0, 3, width, width))
-label_list = torch.empty(0)
-for img, label in tqdm(test_loader, dynamic_ncols=True, desc=f'load test data'):
-    
-    img_list = torch.cat((img_list, img), 0)
-    label_list = torch.cat((label_list, label))
-
-
-
-train_loss = []
-valide_acc = []
-pre_acc = 0
-optimizer = torch.optim.Adam(params=feature_extractor.parameters(), lr=args.learning_rate)
-
-#start train
-for epoch in range(epochs):
-    total_loss = 0
-    feature_extractor.train()
+    #Instantiate the model
+    feature_extractor = PretrainedResNet()
     feature_extractor = feature_extractor.to(device)
-    for bch, data in enumerate(tqdm(train_loader, dynamic_ncols=True, desc=f'epoch {epoch+1}/{epochs}')):
-        
-        img, label = data 
-        img, label = img.to(device), label.to(device)
 
-        feature= feature_extractor(img)
- 
-        #compute loss
-        optimizer.zero_grad()
-        #cross_entropy_loss = torch.nn.CrossEntropyLoss()
-        #id_loss = cross_entropy_loss(id_logits, label)
-        triplet_loss = tripletLoss(feature, args.train_pic_num, args.margin)(feature)
-        loss = triplet_loss
-        
-        #backpropagation
-        loss.backward()
-        optimizer.step()
-        
-        total_loss += loss.item()
-    print(f'loss : {total_loss}, triplet_loss: {triplet_loss}, ', end='')
-    train_loss.append(total_loss)
-    torch.save(feature_extractor, f'{save_dir}/{args.model_name}.pt')
 
-    #test model
+    for name, param in feature_extractor.named_parameters():
+        if 'layer1' in name or 'layer3' in name or 'layer2' in name:
+            param.requires_grad = False
+
+
+    #load train data
+    train_set = VeRIWildDataset(train_transform, args.train_image_dir, train_classes_num, args.train_pic_num) 
+    train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
+
+    #load test data
+    test_set = VeRIWildDataset(test_transform, args.test_image_dir, 100, args.test_pic_num)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
+
+    img_list = torch.empty((0, 3, width, width))
+    label_list = torch.empty(0)
+    for img, label in tqdm(test_loader, dynamic_ncols=True, desc=f'load test data'):
+        img_list = torch.cat((img_list, img), 0)
+        label_list = torch.cat((label_list, label))
+
+
+
+    train_loss = []
+    valid_acc = [[],[],[]] #index 0 = top 1, index 1 = top 3, index 2 = top 5
+    max_acc = 0
+    count = 0
+    optimizer = torch.optim.Adam(params=feature_extractor.parameters(), lr=args.learning_rate)
+
+    #start train
+    for epoch in range(epochs):
+        total_loss = 0
+        feature_extractor.train()
+        feature_extractor = feature_extractor.to(device)
+        for bch, data in enumerate(tqdm(train_loader, dynamic_ncols=True, desc=f'epoch {epoch+1}/{epochs}')):
+            
+            img, label = data 
+            img, label = img.to(device), label.to(device)
+
+            feature= feature_extractor(img)
     
-    acc = 0
-    
-
-    feature_extractor.eval()
-    feature_extractor = feature_extractor.to('cpu')
-    with torch.no_grad():
-        feature_set= feature_extractor(img_list.to('cpu'))
-        dist_matrix = compute_dist(feature_set)
+            #compute loss
+            optimizer.zero_grad()
+            #cross_entropy_loss = torch.nn.CrossEntropyLoss()
+            #id_loss = cross_entropy_loss(id_logits, label)
+            triplet_loss = tripletLoss(feature, args.train_pic_num, args.margin)(feature)
+            loss = triplet_loss
+            
+            #backpropagation
+            loss.backward()
+            optimizer.step()
+            
+            total_loss += loss.item()
+        print(f'loss : {total_loss}, triplet_loss: {triplet_loss}', end='')
+        train_loss.append(total_loss)
         
-        knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
 
-        '''
-        for i in range(len(img_list)):
-            print(f'knn idx : {i} : ', end='')
-            for j in range(21):
-                print(f'{knn_idx[i][j]}, ', end='')
+        #test model
+        feature_extractor.eval()
+        feature_extractor = feature_extractor.to('cpu')
+        with torch.no_grad():
+            feature_set= feature_extractor(img_list.to('cpu'))
+            dist_matrix = compute_dist_sqr(feature_set, feature_set)
+            
+            knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
+
+            #find top k
+            for i in range(len(k)):
+                acc = top_k(k[i],dist_matrix,label_list, knn_idx)
+                valid_acc[i].append(acc)
+                print(f', top {k[i]} acc : {acc} ', end='')
             print('')
-        '''
-
-
         
-        for i in range(len(dist_matrix)):
-            target = label_list[i]
-            count = dict()    
-            for j in range(1,k+1):
-                if label_list[knn_idx[i][j]] not in count:                    
-                    count[label_list[knn_idx[i][j]]] = 1
-                else:
-                    count[label_list[knn_idx[i][j]]] += 1
+        #Recording accuracy and loss.
+        table_data = [
+            ['type', 'value'],
+            ['top 1', f'{valid_acc[0][epoch]}'],
+            ['top 3', f'{valid_acc[1][epoch]}'],
+            ['top 5', f'{valid_acc[2][epoch]}'],
+            ['total loss', f'{total_loss}']
+        ]
+        table = AsciiTable(table_data)
+        f.write(f'\n{table.table}\n')
 
-            predict = max(count, key=count.get)
-            if predict == target:
-                acc += 1
-        valide_acc.append(acc/len(dist_matrix))
-        print(f'acc : {acc/len(dist_matrix)} ')
+        # save best model
+        if max_acc <= acc: #top 5 acc
+            max_acc = acc
+            torch.save(feature_extractor, f'{save_dir}/best.pt')
 
 
-    #early stopping
-    
-    # if epoch % 5 == 0:
-    #     if epoch != 0 and acc < pre_acc:
-    #         draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
-    #         draw_acc(valide_acc, f'{save_dir}/{args.model_name}_acc.jpg')
-    #         f.write(f'early stop at epoch {epoch}\n')
-    #         f.close()
-    #         exit()
-    #     pre_acc = acc
-    
-    
+        #early stopping
+        # if max_acc < acc: #top 5 acc
+        #     max_acc = acc
+        #     torch.save(feature_extractor, f'{save_dir}/best.pt')
+        #     count = 0
+        # else:
+        #     count += 1
 
-draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
-draw_acc(valide_acc, f'{save_dir}/{args.model_name}_acc.jpg')
-f.close()
+        # if count >= 10:
+        #     draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
+        #     draw_acc(valid_acc, f'{save_dir}/{args.model_name}_acc.jpg')
+        #     f.write(f'early stop at epoch {epoch}\n')
+        #     f.close()
+        #     exit()
+
+
+    #draw loss and acc
+    torch.save(feature_extractor, f'{save_dir}/{args.model_name}.pt')
+    draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
+    for i in range(len(k)):
+        draw_acc(valid_acc[i], f'{save_dir}/{args.model_name}_top{i}acc.jpg')
+    f.close()
