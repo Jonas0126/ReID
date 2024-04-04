@@ -4,8 +4,9 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 from utils.dist import *
-from utils.find_knn import top_k
+from utils.find_knn import top_k_test
 from torchvision.utils import save_image
+from torchvision.io import read_image
 import os
 import torch
 
@@ -22,68 +23,77 @@ if __name__ == '__main__':
 
 
     #define transform for dataset
-    trans = [
+    trans = transforms.Compose([
         transforms.Resize((args.width, args.width)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
+    ])
 
 
     #create data set
-    gallery_img_set = VeRIWildTest(trans, args.gallery_images_dir)
-    gallery_loader = DataLoader(dataset=gallery_img_set, batch_size=32, num_workers=6)    
-    query_img_set = VeRIWildTest(trans, args.query_images_dir)
-    query_loader = DataLoader(dataset=query_img_set, batch_size=32, num_workers=6)
+    gallery_img_set = VeRIWildTest(trans, args.gallery_images_dir, 239)
+    gallery_loader = DataLoader(dataset=gallery_img_set, batch_size=1, num_workers=1)    
+    query_img_set = VeRIWildTest(trans, args.query_images_dir, 40)
+    query_loader = DataLoader(dataset=query_img_set, batch_size=1, num_workers=1)
     
     #load model
     model = torch.load(f'{args.model_name}.pt').to('cpu')
     model.eval()
+    
 
-    #load data and feature
-    raw_gallery_img_list = torch.empty((0, 3, args.width, args.width))
-    gallery_feature = torch.empty(0, 2048)
-    norm_gallery_img_list = torch.empty((0, 3, args.width, args.width))
+    k = [1,3,5]
+    total_acc = [0,0,0]
+    class_num = 0
+    #load gallery data
     gallery_label_list = torch.empty(0)
-    for raw_img, img, label in tqdm(gallery_loader, dynamic_ncols=True, desc=f'load gallery data'):
-        raw_gallery_img_list = torch.cat((raw_gallery_img_list, raw_img), 0)
-        norm_gallery_img_list = torch.cat((norm_gallery_img_list, img), 0)
-        
-        feature = model(img)
-        gallery_feature = torch.cat((gallery_feature, feature), 0)
-        
+    gallery_img_list = torch.empty((0, 3, args.width, args.width))
+    for img, label in tqdm(gallery_loader, dynamic_ncols=True, desc=f'load gallery data'):
+        gallery_img_list = torch.cat((gallery_img_list, img), 0)
         gallery_label_list = torch.cat((gallery_label_list, label))
+       
+    gallery_feature = model(gallery_img_list)
 
-    raw_query_img_list = torch.empty((0, 3, args.width, args.width))
-    norm_query_img_list = torch.empty((0, 3, args.width, args.width))
-    query_feature = torch.empty(0, 2048)
-    query_label_list = torch.empty(0)
-    for raw_img, img, label in tqdm(query_loader, dynamic_ncols=True, desc=f'load query data'):
-        raw_query_img_list = torch.cat((raw_query_img_list, raw_img), 0)
-        norm_query_img_list = torch.cat((norm_query_img_list, img), 0)
-        feature = model(img)
-        query_feature = torch.cat((query_feature, feature), 0)
-        query_label_list = torch.cat((query_label_list, label))
+    for query_img, query_label in tqdm(query_loader, dynamic_ncols=True, desc=f'load query data'):
+        #initial some parameter
+        query_feature = model(query_img)
+        dist_matrix = torch.empty(0)
+        acc = [0,0,0]
+        
+        #cal dist between query and gallery
+        dist = compute_dist_rect(query_feature, gallery_feature)    
+        dist_matrix=torch.cat((dist_matrix, dist))
+        
+        #find nearest neighbor
+        knn_idx = torch.argsort(torch.squeeze(dist_matrix), descending=True)
 
-    
-    dist_matrix = compute_dist_rect(query_feature, gallery_feature)
-    knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
-
-    k = [1, 3]
-
-    for i in range(len(k)):
-        acc = top_k(k[i],dist_matrix,gallery_label_list, knn_idx,1)
-        print(f', top {k[i]} acc : {acc} ', end='')
-    print('')
-
-
-    
-    for i in range(100):
+        #save image
         save_list = torch.empty((0, 3, args.width, args.width))
-        save_list = torch.cat((save_list, torch.unsqueeze(raw_query_img_list[i], 0)), 0)
-        for j in range(5):
-            save_list = torch.cat((save_list, torch.unsqueeze(raw_gallery_img_list[knn_idx[i][j]], 0)), 0)
+        img = read_image(f'datasets/test/query/images/{int(query_label)}.jpg').to(torch.float32) / 255
+        transform = transforms.Resize((args.width, args.width))
+        img = transform(img)
+        save_list = torch.cat((save_list, torch.unsqueeze(img, 0)), 0)
 
-        save_image(save_list, f'test_result/img_{i}.jpg')
-
+        for i in range(5):
+            img = read_image(f'datasets/test/gallery/images/{knn_idx[i]}.jpg').to(torch.float32) / 255
+            img = transform(img)
+            save_list = torch.cat((save_list, torch.unsqueeze(img, 0)), 0)
+        save_image(save_list, f'test_result/restnet_X_img_{class_num}.jpg')
+        class_num += 1
+        print(knn_idx[0:6])
+        
+        #cal top k acc
+        for i in range(3):
+            acc[i] = top_k_test(k[i],dist_matrix, query_label, gallery_label_list, knn_idx)
+            print(f'top {k[i]} acc : {acc[i]}, ', end='')
+            total_acc[i] = total_acc[i]+acc[i]
+        print('')
+    #recording Log
+    f = open('test_result/restnet_X_acc_Log.txt', 'w')
+    for i in range(3):
+        print(f'total top{k[i]} acc : {total_acc[i]/40}, ', end='')
+    
+        f.write(f'total top{k[i]} acc : {total_acc[i]/40}\n')
+    f.close()
+    
     
             
 

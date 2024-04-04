@@ -3,7 +3,7 @@
 lr=(0.001)
 margin=(0.3 0 -0.2)
 width=(256)
-batch=(64)
+batch=(32)
 name=0
 for ((i=0; i < ${#lr[@]}; i++))
 do

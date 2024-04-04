@@ -51,14 +51,14 @@ class VeRIWildDataset(Dataset):
                 return img_idx
 
 class VeRIWildTest(Dataset):
-    def __init__(self, transform=None, t='gallery'):
+    def __init__(self, transform=None, t='gallery', L = 71):
         self.img_dir = os.path.join(t,'images')
         print(f'len of {self.img_dir} : {len(os.listdir(self.img_dir))}')
         self.label_dir = os.path.join(t,'labels')
         self.transform = transform
-        
+        self.L = L
     def __len__(self):
-        return len(os.listdir(self.img_dir))
+        return self.L
     
     def __getitem__(self, idex):
         img_path = os.path.join(self.img_dir, f'{idex}.jpg')
@@ -66,15 +66,11 @@ class VeRIWildTest(Dataset):
         f = open(label_path, 'r')
         label = f.readline()
         f.close()
-        raw_img = read_image(img_path).to(torch.float32) / 255
+        img = read_image(img_path).to(torch.float32) / 255
         
-        #resize
-        trans = self.transform[0]
-        raw_img = trans(raw_img)
-        #normalize
-        trans = self.transform[1]
-        img = trans(raw_img)
-        return raw_img, img, int(label)
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, int(label)
 
 if __name__ == '__main__':
 

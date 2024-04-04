@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', '-s', default='result/', type=str)
     parser.add_argument('--model_name', default='resnet', type=str)
 
-    parser.add_argument('--epochs', '-e', default=100,type=int)
+    parser.add_argument('--epochs', '-e', default=30,type=int)
     parser.add_argument('--batch', '-b', default=32, type=int)  
     parser.add_argument('--learning_rate', '-lr', default=0.01, type=float)
     parser.add_argument('--knn', '-k', default=[1,3,5], type=list)
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         feature_extractor = feature_extractor.to('cpu')
         with torch.no_grad():
             feature_set= feature_extractor(img_list.to('cpu'))
-            dist_matrix = compute_dist_sqr(feature_set, feature_set)
+            dist_matrix = compute_dist_sqr(feature_set)
             
             knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
 
