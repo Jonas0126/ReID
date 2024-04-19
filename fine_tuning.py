@@ -1,4 +1,4 @@
-from datasets.create_dataset import VeRIWildDataset
+from datasets.create_dataset import AiCupDataset
 from models.ResNet import ResNet, PretrainedResNet
 from models.loss import tripletLoss
 from argparse import ArgumentParser
@@ -11,22 +11,24 @@ import torch
 from terminaltables import AsciiTable
 
 TEST_PIC_NUM = 10 #Number of pictures in each class in the test dataset
-TRAIN_PIC_NUM = 4 #Number of pictures in each class in the train dataset
-TEST_CLASS_NUM = 150 #The number of classes used in the test dataset.
+TRAIN_PIC_NUM = 2 #Number of pictures in each class in the train dataset
+TEST_CLASS_NUM = 100 #The number of classes used in the test dataset.
 KNN = [1, 3, 5]
+
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--learning_rate', '-lr', default=0.01, type=float)
-    parser.add_argument('--epochs', '-e', default=30, type=int)
-    parser.add_argument('--batch',  '-b', default=32, type=int)  
-    parser.add_argument('--width',  '-w', default=256, type=int)
-    parser.add_argument('--margin', '-m', default=1,type=float)
-    parser.add_argument('--test_image_dir', '-ti', type=str)
+    parser.add_argument('--epochs', '-e', default=30,   type=int)
+    parser.add_argument('--batch',  '-b', default=32,   type=int)  
+    parser.add_argument('--width',  '-w', default=256,  type=int)
+    parser.add_argument('--margin', '-m', default=1,    type=float)
+    parser.add_argument('--test_image_dir', '-testimg', type=str)
     parser.add_argument('--train_image_dir', '-i', type=str)
-    parser.add_argument('--save_dir', '-s', type=str)
-    parser.add_argument('--model_name', type=str)
+    parser.add_argument('--save_dir', '-s',     type=str)
+    parser.add_argument('--save_model_name',    type=str)
+    parser.add_argument('--fine_tuning_model',  type=str)
 
     args = parser.parse_args()
 
@@ -38,33 +40,33 @@ if __name__ == '__main__':
         print(f'{args.test_image_dir} does not exist.')
         exit()
 
-    save_dir = os.path.join(args.save_dir, args.model_name)
+    save_dir = os.path.join(args.save_dir, args.save_model_name)
     if not os.path.exists(save_dir):
         os.mkdir(f'{save_dir}')
 
 
-    train_classes_num = len(os.listdir(args.train_image_dir))
-
-    print(f'trains classes : {train_classes_num}')
+    train_class_num = None
+    print(f'trains classes : {train_class_num}')
     print(f'test classes : {TEST_CLASS_NUM}')
 
     epochs = args.epochs
+    
     width = args.width
 
-
-    #record the parameter
-    f = open(f'{save_dir}/{args.model_name}_log.txt', 'w')
+    #log parameter
+    f = open(f'{save_dir}/{args.save_model_name}_log.txt', 'w')
     f.write(f'lr : {args.learning_rate}, epochs : {args.epochs}, batch size : {args.batch}, image width : {args.width}, margin : {args.margin}\n')
 
-    #define transform for train dataset
+    #define transform for dataset
     train_transform = transforms.Compose([
         transforms.Resize((width, width)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        # transforms.ColorJitter(brightness=0.5),
         transforms.RandomHorizontalFlip(),
+        # transforms.RandomVerticalFlip(p=0.4),
         transforms.RandomErasing(p=0.4)
     ])
 
-    #define transform for test dataset
     test_transform = transforms.Compose([
         transforms.Resize((width, width)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -75,21 +77,21 @@ if __name__ == '__main__':
     print(f'training on {device}')
 
     #Instantiate the model
-    feature_extractor = PretrainedResNet()
+    feature_extractor = torch.load(f'{args.fine_tuning_model}')
     feature_extractor = feature_extractor.to(device)
 
  
     #Freeze certain layers of the model.
     for name, param in feature_extractor.named_parameters():
-        if 'layer1' in name or 'layer3' in name or 'layer2' in name:
+        if 'layer1' in name or 'layer3' in name or 'layer2' in name or 'layer4.0' in name:
             param.requires_grad = False
 
     #load train data
-    train_set = VeRIWildDataset(train_transform, args.train_image_dir, train_classes_num, TRAIN_PIC_NUM) 
+    train_set = AiCupDataset(train_transform, args.train_image_dir, train_class_num, TRAIN_PIC_NUM) 
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
 
     #load test data
-    test_set = VeRIWildDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
+    test_set = AiCupDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
 
 
@@ -99,7 +101,7 @@ if __name__ == '__main__':
         img_list = torch.cat((img_list, img), 0)
         label_list = torch.cat((label_list, label))
 
-
+ 
 
     train_loss = []
     valid_acc = [[],[],[]] #index 0 = top 1, index 1 = top 3, index 2 = top 5
@@ -143,10 +145,30 @@ if __name__ == '__main__':
             dist_matrix = compute_dist_sqr(feature_set)
             
             knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
+            
+            if epoch == epochs-1:
+                f = open('knn_index.txt', 'w')
+                #record knn_index and label
+                for i in range(len(dist_matrix)):
+                    target = int(label_list[i])
+                    f.write(f'{target}\n')
+                    label_count = dict()  
+                    for j in range(11):
+                        f.write(f'{knn_idx[i][j]:6},')
+                    f.write('\n') 
+                    for j in range(11):
+                        label = int(label_list[knn_idx[i][j]])
+                        f.write(f'{label:6},')
+                    f.write('\n')
+                    for j in range(11):
+                        d = dist_matrix[i][knn_idx[i][j]].item()
+                        f.write(f'{d:6.3f},')
+                    f.write(f'\n--------------------------------------------------------------------')
+
 
             #find top k
             for i in range(len(KNN)):
-                acc = top_k(KNN[i], dist_matrix,label_list, knn_idx)
+                acc = top_k(KNN[i],dist_matrix,label_list, knn_idx)
                 valid_acc[i].append(acc)
                 print(f', top {KNN[i]} acc : {acc} ', end='')
             print('')
@@ -177,16 +199,16 @@ if __name__ == '__main__':
         #     count += 1
 
         # if count >= 10:
-        #     draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
-        #     draw_acc(valid_acc, f'{save_dir}/{args.model_name}_acc.jpg')
+        #     draw_loss(train_loss, f'{save_dir}/{args.save_model_name}_loss.jpg')
+        #     draw_acc(valid_acc, f'{save_dir}/{args.save_model_name}_acc.jpg')
         #     f.write(f'early stop at epoch {epoch}\n')
         #     f.close()
         #     exit()
 
 
     #draw loss and acc
-    torch.save(feature_extractor, f'{save_dir}/{args.model_name}.pt')
-    draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
+    torch.save(feature_extractor, f'{save_dir}/{args.save_model_name}.pt')
+    draw_loss(train_loss, f'{save_dir}/{args.save_model_name}_loss.jpg')
     for i in range(len(KNN)):
-        draw_acc(valid_acc[i], f'{save_dir}/{args.model_name}_top{i}acc.jpg')
+        draw_acc(valid_acc[i], f'{save_dir}/{args.save_model_name}_top{i}acc.jpg')
     f.close()
