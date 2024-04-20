@@ -99,9 +99,17 @@ class ResNet(nn.Module):
     
 if __name__ == '__main__':
 
-    model = ResNet([3, 4, 23, 3])
-    print(model)
+    feature_extractor = PretrainedResNet()
+    input_ = torch.rand(2, 3,224,224)
 
+    output_ = feature_extractor(input_)
+    print(f'dot product before norm : {torch.dot(output_[0], output_[0])}') 
+    output_len = torch.sqrt(torch.dot(output_[0], output_[0]))
+    print(f'len of output : {output_len}')
+    output_[0] /= output_len
+    print(f'dot product after norm : {torch.dot(output_[0], output_[0])}') 
+    output_len = torch.sqrt(torch.dot(output_[0], output_[0]))
+    print(f'len of output : {output_len}')
     
 
     

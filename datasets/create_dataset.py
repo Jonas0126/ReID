@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import random
-
+import cv2
 
 
 class VeRIWildDataset(Dataset):
@@ -25,6 +25,7 @@ class VeRIWildDataset(Dataset):
         return self.data_num
 
     def __getitem__(self, idex):
+        
         label = idex // self.pic_num
         if self.lastLabel != label:
             self.lastLabel = label
@@ -34,10 +35,8 @@ class VeRIWildDataset(Dataset):
 
         img_path = os.path.join(self.img_dir,f'{label}', f'{img_idx}.jpg')
         img = read_image(img_path).to(torch.float32) / 255
-        
         if self.transform is not None:
             img = self.transform(img)
-
         return img, label
 
 
@@ -61,6 +60,7 @@ class VeRIWildTest(Dataset):
         return self.L
     
     def __getitem__(self, idex):
+        
         img_path = os.path.join(self.img_dir, f'{idex}.jpg')
         label_path = os.path.join(self.label_dir, f'{idex}.txt')
         f = open(label_path, 'r')
@@ -82,7 +82,9 @@ class AiCupDataset(Dataset):
         self.image_num = image_num #num of image in each class
 
         image_files = os.listdir(img_dir)
-        self.image_file_list = self.filt_image_files(image_files, img_dir)
+
+        #filter categories with fewer images than
+        self.image_file_list = self.filt_image_files(image_files, img_dir) 
         if class_num is not None:
             self.class_num = class_num
         else:
