@@ -24,7 +24,7 @@ class Palette:
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--params', '-p', type=str, default='./goodshit/resnet_v14/best.pt', help='the path to the pytorch model')
+    parser.add_argument('--params', '-p', type=str, default='./trained_result/aicup/resnet_X_finetune_V0/best.pt', help='the path to the pytorch model')
     parser.add_argument('--images', '-i', type=str, default='./IMAGE/0902_150000_151900', help='path to the images')
     parser.add_argument('--labels', '-l', type=str, default='./LABEL/0902_150000_151900', help='path to the corresponding labels')
     parser.add_argument('--detail', type=str, default='off', help='record all information include dist_matrix etc.')
@@ -34,6 +34,9 @@ if __name__ == '__main__':
     parser.add_argument('--name', type=str)
     args = parser.parse_args()
 
+
+    if not os.path.exists(f'{args.out}'):
+        os.mkdir(args.out)
 
     camera_tracks = defaultdict(list)
     for file in os.listdir(args.images):
@@ -91,8 +94,7 @@ if __name__ == '__main__':
         if not os.path.exists(save_picture_path):
             os.mkdir(save_picture_path)
             
-        text_save_path = os.path.join(save_picture_path, f'frame{i+1}_dist_log.txt')
-        f = open(text_save_path, 'w')
+
 
         for j in range(len(current_imgs)):
             img = transform(current_imgs[j])
@@ -103,6 +105,8 @@ if __name__ == '__main__':
             
             #In case of need, record all information.
             if args.detail == 'on':
+                text_save_path = os.path.join(save_picture_path, f'frame{i+1}_dist_log.txt')
+                f = open(text_save_path, 'w')
                 if pre_feature:
                     #compute dist between feature
                     dist_matrix = torch.squeeze(compute_dist_rect(feature, pre_feature))

@@ -9,47 +9,57 @@ from utils import *
 import os
 import torch
 from terminaltables import AsciiTable
-
+from memory_profiler import profile
+import psutil
 TEST_PIC_NUM = 10 #Number of pictures in each class in the test dataset
 TRAIN_PIC_NUM = 4 #Number of pictures in each class in the train dataset
 TEST_CLASS_NUM = 150 #The number of classes used in the test dataset.
 KNN = [1, 3, 5]
+VALID_IMAGE_DIR = 'valid/images/'
+TRAIN_IMAGE_DIR = 'train/images/'
+SAVE_DIR = 'trained_result'
 
+if not os.path.exists('trained_result/aicup/'):
+    os.mkdir('trained_result/aicup/')
+
+if not os.path.exists('trained_result/VeRIWild/'):
+    os.mkdir('trained_result/VeRIWild/')
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--learning_rate', '-lr', default=0.01, type=float)
-    parser.add_argument('--epochs', '-e', default=30, type=int)
+    parser.add_argument('--learning_rate', '-lr', default=0.001, type=float)
+    parser.add_argument('--epochs', '-e', default=50, type=int)
     parser.add_argument('--batch',  '-b', default=32, type=int)  
     parser.add_argument('--width',  '-w', default=256, type=int)
-    parser.add_argument('--margin', '-m', default=1,type=float)
-    parser.add_argument('--test_image_dir', '-ti', type=str)
-    parser.add_argument('--train_image_dir', '-i', type=str)
-    parser.add_argument('--save_dir', '-s', type=str)
+    parser.add_argument('--margin', '-m', default=0.5,type=float)
     parser.add_argument('--model_name', type=str)
-
+    parser.add_argument('--datasets', type=str)
     args = parser.parse_args()
 
-    if not os.path.exists(args.train_image_dir):
-        print(f'{args.train_image_dir} does not exist.')
-        exit()
-
-    if not os.path.exists(args.test_image_dir):
-        print(f'{args.test_image_dir} does not exist.')
-        exit()
-
-    save_dir = os.path.join(args.save_dir, args.model_name)
-    if not os.path.exists(save_dir):
-        os.mkdir(f'{save_dir}')
-
-
-    train_classes_num = len(os.listdir(args.train_image_dir))
-
-    print(f'trains classes : {train_classes_num}')
-    print(f'test classes : {TEST_CLASS_NUM}')
 
     epochs = args.epochs
     width = args.width
+    
+    
+    save_dir = os.path.join(SAVE_DIR, f'{args.datasets}', f'{args.model_name}_{str(args.width)}_{str(args.margin)}')
+    if not os.path.exists(save_dir):
+        os.mkdir(f'{save_dir}')
+
+    train_image_dir = os.path.join('datasets', f'{args.datasets}', 'train/images')
+    test_image_dir = os.path.join('datasets', f'{args.datasets}', 'valid/images')
+    
+    if not os.path.exists(train_image_dir):
+        print(f'{train_image_dir} does not exist.')
+        exit()
+
+    if not os.path.exists(test_image_dir):
+        print(f'{test_image_dir} does not exist.')
+        exit()
+
+
+    train_classes_num = len(os.listdir(train_image_dir))
+    print(f'Number of classes for training : {train_classes_num}')
+    print(f'Number of classes for valid : {TEST_CLASS_NUM}')
 
 
     #record the parameter
@@ -85,11 +95,11 @@ if __name__ == '__main__':
             param.requires_grad = False
 
     #load train data
-    train_set = trainDataset(train_transform, args.train_image_dir, train_classes_num, TRAIN_PIC_NUM) 
+    train_set = trainDataset(train_transform, train_image_dir, train_classes_num, TRAIN_PIC_NUM) 
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
 
     #load test data
-    test_set = trainDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
+    test_set = trainDataset(test_transform, test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
 
 
@@ -109,20 +119,20 @@ if __name__ == '__main__':
 
     #start train
     for epoch in range(epochs):
+
         total_loss = 0
         feature_extractor.train()
         feature_extractor = feature_extractor.to(device)
+
         for bch, data in enumerate(tqdm(train_loader, dynamic_ncols=True, desc=f'epoch {epoch+1}/{epochs}')):
             
             img, label = data 
             img, label = img.to(device), label.to(device)
 
-            feature= feature_extractor(img)
+            feature = feature_extractor(img)
     
             #compute loss
             optimizer.zero_grad()
-            #cross_entropy_loss = torch.nn.CrossEntropyLoss()
-            #id_loss = cross_entropy_loss(id_logits, label)
             triplet_loss = tripletLoss(feature, TRAIN_PIC_NUM, args.margin)(feature)
             loss = triplet_loss
             
@@ -135,7 +145,7 @@ if __name__ == '__main__':
         train_loss.append(total_loss)
         
 
-        #test model
+        #valid model
         feature_extractor.eval()
         feature_extractor = feature_extractor.to('cpu')
         with torch.no_grad():
@@ -162,31 +172,27 @@ if __name__ == '__main__':
         table = AsciiTable(table_data)
         f.write(f'\n{table.table}\n')
 
-        # save best model
-        if max_acc <= acc: #top 5 acc
-            max_acc = acc
-            torch.save(feature_extractor, f'{save_dir}/best.pt')
-
 
         #early stopping
-        # if max_acc < acc: #top 5 acc
-        #     max_acc = acc
-        #     torch.save(feature_extractor, f'{save_dir}/best.pt')
-        #     count = 0
-        # else:
-        #     count += 1
+        if max_acc < acc: #top 5 acc
+            max_acc = acc
+            torch.save(feature_extractor, f'{save_dir}/best.pt')
+            count = 0
+        else:
+            count += 1
 
-        # if count >= 10:
-        #     draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
-        #     draw_acc(valid_acc, f'{save_dir}/{args.model_name}_acc.jpg')
-        #     f.write(f'early stop at epoch {epoch}\n')
-        #     f.close()
-        #     exit()
+        if count >= 10:
+            torch.save(feature_extractor, f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}.pt')
+            draw_loss(train_loss, f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}_loss.jpg')
+            for i in range(len(KNN)):
+                draw_acc(valid_acc[i], f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}_top{i}acc.jpg')
+            f.close()
+            exit()
 
 
     #draw loss and acc
-    torch.save(feature_extractor, f'{save_dir}/{args.model_name}.pt')
-    draw_loss(train_loss, f'{save_dir}/{args.model_name}_loss.jpg')
+    torch.save(feature_extractor, f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}.pt')
+    draw_loss(train_loss, f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}_loss.jpg')
     for i in range(len(KNN)):
-        draw_acc(valid_acc[i], f'{save_dir}/{args.model_name}_top{i}acc.jpg')
+        draw_acc(valid_acc[i], f'{save_dir}/{args.model_name}_{str(args.width)}_{str(args.margin)}_top{i}acc.jpg')
     f.close()
