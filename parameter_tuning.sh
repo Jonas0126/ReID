@@ -1,9 +1,10 @@
 #! /bin/bash
 
-lr=(0.001)
-margin=(0.3 0.2 0.1 0.0 -0.1 -0.2 -0.3)
+lr=(0.0001 0.00001)
+margin=(0)
+img_num=(8 16)
 width=(256)
-batch=(32)
+batch=(32 64)
 name=0
 for ((i=0; i < ${#lr[@]}; i++))
 do
@@ -13,11 +14,12 @@ do
         do
             for ((n=0; n < ${#batch[@]}; n++))
             do
-                
-                echo train_tripletloss.py -i datasets/VeRIWild/train/images/ -ti datasets/VeRIWild/valid/images/ -s trained_result/resnet_SP_256/ -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} --model_name resnet_SP_v$name 
-                python train_tripletloss.py -i datasets/VeRIWild/train/images/ -ti datasets/VeRIWild/valid/images/ -s trained_result/resnet_SP_256/ -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} --model_name resnet_SP_v$name 
-
-                ((name++))
+                for ((q=0; q < ${#img_num[@]}; q++))
+                do
+                    echo train_SPloss.py -i datasets/VeRIWild/train/images/ -ti datasets/VeRIWild/valid/images/ -s trained_result/resnet_SP_256/ -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} --img_num ${img_num[q]} --model_name resnet_SP_v$name 
+                    python train_SPloss.py -i datasets/VeRIWild/train/images/ -ti datasets/VeRIWild/valid/images/ -s trained_result/resnet_SP_256/ -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} --img_num ${img_num[q]} --model_name resnet_SP_v$name 
+                    ((name++))
+                done
             done
         done
     done

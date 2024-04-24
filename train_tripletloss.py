@@ -1,5 +1,5 @@
-from datasets.create_dataset import VeRIWildDataset
-from models.ResNet import ResNet, PretrainedResNet
+from create_dataset import trainDataset
+from models.ResNet import PretrainedResNet
 from models.loss import tripletLoss
 from argparse import ArgumentParser
 from torchvision import transforms
@@ -85,11 +85,11 @@ if __name__ == '__main__':
             param.requires_grad = False
 
     #load train data
-    train_set = VeRIWildDataset(train_transform, args.train_image_dir, train_classes_num, TRAIN_PIC_NUM) 
+    train_set = trainDataset(train_transform, args.train_image_dir, train_classes_num, TRAIN_PIC_NUM) 
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
 
     #load test data
-    test_set = VeRIWildDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
+    test_set = trainDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
 
 
@@ -131,7 +131,7 @@ if __name__ == '__main__':
             optimizer.step()
             
             total_loss += loss.item()
-        print(f'loss : {total_loss}, triplet_loss: {triplet_loss}', end='')
+        print(f'loss : {total_loss}, ', end='')
         train_loss.append(total_loss)
         
 
@@ -148,7 +148,7 @@ if __name__ == '__main__':
             for i in range(len(KNN)):
                 acc = top_k(KNN[i], dist_matrix,label_list, knn_idx)
                 valid_acc[i].append(acc)
-                print(f', top {KNN[i]} acc : {acc} ', end='')
+                print(f', top {KNN[i]} acc : {acc:.4f} ', end='')
             print('')
         
         #Recording accuracy and loss.

@@ -2,7 +2,7 @@
 
 lr=(0.001)
 margin=(0.3)
-width=(224)
+width=(300)
 batch=(32)
 name=0
 for ((i=0; i < ${#lr[@]}; i++))
@@ -14,8 +14,8 @@ do
             for ((n=0; n < ${#batch[@]}; n++))
             do
                 
-                echo fine_tuning.py -i datasets/aicup/aicup_reid/train/images/ -testimg datasets/aicup/aicup_reid/valid/images/ -s fine_tune_result/ --save_model_name test_V$name --fine_tuning_model trained_result/resnet_224/resnet_v0/best.pt -m ${margin[j]} -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} -e 30
-                python fine_tuning.py -i datasets/aicup/aicup_reid/train/images/ -testimg datasets/aicup/aicup_reid/valid/images/ -s fine_tune_result/ --save_model_name test_V$name --fine_tuning_model trained_result/resnet_224/resnet_v0/best.pt -m ${margin[j]} -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} -e 30
+                echo fine_tuning.py -i datasets/aicup/aicup_reid/train/images/ -testimg datasets/aicup/aicup_reid/valid/images/ -s fine_tune_result/ --save_model_name resnet_300_0.3_finetune_V$name --fine_tuning_model trained_result/resnet_300/resnet_v0/best.pt -m ${margin[j]} -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} -e 30
+                python fine_tuning.py -i datasets/aicup/train/images/ -testimg datasets/aicup/valid/images/ -s fine_tune_result/ --save_model_name resnet_300_0.3_finetune_V$name --fine_tuning_model trained_result/resnet_300/resnet_v0/best.pt -m ${margin[j]} -lr ${lr[i]} -w ${width[k]} -b ${batch[n]} -e 30
 
                 ((name++))
             done

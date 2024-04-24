@@ -10,8 +10,7 @@ import cv2
 class Palette:
     def __init__(self):     
         self.colors = {}
-
-
+        
     def get_color(self, id):
         if not id in self.colors:
             color = list(np.random.choice(range(256), size=3))
@@ -32,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--cam', '-c', type=int, help='the camera you want to visualize')
     parser.add_argument('--out', type=str, help='the path to save the video')
     parser.add_argument('--fps', type=int, default=2)
-
+    parser.add_argument('--name', type=str)
     args = parser.parse_args()
 
 
@@ -52,7 +51,7 @@ if __name__ == '__main__':
         v.sort()
 
 
-    save_path = os.path.join(f'{args.out}', 'video/output.mp4')
+    save_path = os.path.join(f'{args.out}', f'video/{args.name}.mp4')
     fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
     
     out = cv2.VideoWriter(save_path, fourcc, 2, (1280,  720)) 

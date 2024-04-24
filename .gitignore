@@ -3,8 +3,13 @@ __pycache__
 *.txt
 *.pt
 test
-VeRIWILD
+VeRIWild
 images
 label
 train
 visualization
+video
+*_result
+IMAGE
+LABEL
+datasets

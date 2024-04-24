@@ -4,11 +4,11 @@ import sys
 import torch.nn.functional as F
 import time
 class SP_loss(nn.Module):
-    def __init__(self, feature_set, T=0.04):
+    def __init__(self, feature_set, pic_num, T=0.04):
         super().__init__()
         self.row = len(feature_set) 
         self.classes = self.row // 8
-        self.pic_num = 4   #number of instance per identity
+        self.pic_num = pic_num   #number of instance per identity
         self.T = T
         self.device = 'cuda'
 
@@ -46,25 +46,7 @@ class SP_loss(nn.Module):
             
             loss = loss + torch.log(1 + temp_3) 
 
-        del x, alpha, negative_S, least_hard_positive_S
-        torch.cuda.empty_cache()
         return loss / len(hard_positive_S)
-
-    # def compute_least_hard_positive_S(self):
-    #     least_positive_S = torch.empty((0), device='cpu', requires_grad=True)
-    #     least_positive_similarity = 0
-    #     for i in range(self.row):
-    #         class_i = i // self.pic_num
-    #         temp = 0
-    #         for j in range(self.row):
-    #             if j // self.pic_num == class_i:
-    #                 temp = temp + torch.exp(-1 * self.dot_matrix[i][j] / self.T)
-    #         least_positive_similarity = least_positive_similarity + 1/temp
-
-    #         if (i+1) // self.pic_num != class_i:
-    #             least_positive_S = torch.cat((least_positive_S, torch.unsqueeze(self.T * torch.log(least_positive_similarity), dim=0).to('cpu')))
-    #             least_positive_similarity = 0
-    #     return least_positive_S
 
     def compute_hard_positive_S(self, dot_matrix):
         positive_S = torch.empty((0), device=self.device, requires_grad=True)
@@ -76,13 +58,13 @@ class SP_loss(nn.Module):
             class_i = i // self.pic_num
             temp = 0
             for j in range(self.row):
-                if j // self.pic_num == class_i:
+                if (j // self.pic_num) == class_i:
                     positive_similarity = positive_similarity + torch.exp(-1 * dot_matrix[i][j] / self.T)
                     temp = temp + torch.exp(-1 * dot_matrix[i][j] / self.T)
 
             least_positive_similarity = least_positive_similarity + (1 / temp)
 
-            if (i+1) // self.pic_num != class_i:
+            if ((i+1) // self.pic_num) != class_i:
                 least_positive_S = torch.cat((least_positive_S, torch.unsqueeze(self.T * torch.log(least_positive_similarity), dim=0).to(self.device)))
                 least_positive_similarity = 0
                 positive_S = torch.cat((positive_S, torch.unsqueeze(-1 * self.T * torch.log(positive_similarity), dim=0).to(self.device)))
@@ -98,10 +80,10 @@ class SP_loss(nn.Module):
             class_i = i // self.pic_num
 
             for j in range(self.row):
-                if j // self.pic_num != class_i:
+                if (j // self.pic_num) != class_i:
                     negetive_similarity = negetive_similarity + torch.exp(dot_matrix[i][j] / self.T)
 
-            if (i+1) // self.pic_num != class_i:
+            if ((i+1) // self.pic_num) != class_i:
                 negative_S = torch.cat((negative_S, torch.unsqueeze(self.T * torch.log(negetive_similarity), dim=0).to(self.device)))
                 negetive_similarity = 0
 

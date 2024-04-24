@@ -1,5 +1,5 @@
-from datasets.create_dataset import AiCupDataset
-from models.ResNet import ResNet, PretrainedResNet
+from create_dataset import trainDataset
+from models.ResNet import PretrainedResNet
 from models.loss import tripletLoss
 from argparse import ArgumentParser
 from torchvision import transforms
@@ -49,8 +49,7 @@ if __name__ == '__main__':
     print(f'trains classes : {train_class_num}')
     print(f'test classes : {TEST_CLASS_NUM}')
 
-    epochs = args.epochs
-    
+    epochs = args.epochs 
     width = args.width
 
     #log parameter
@@ -61,9 +60,7 @@ if __name__ == '__main__':
     train_transform = transforms.Compose([
         transforms.Resize((width, width)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        # transforms.ColorJitter(brightness=0.5),
         transforms.RandomHorizontalFlip(),
-        # transforms.RandomVerticalFlip(p=0.4),
         transforms.RandomErasing(p=0.4)
     ])
 
@@ -87,11 +84,11 @@ if __name__ == '__main__':
             param.requires_grad = False
 
     #load train data
-    train_set = AiCupDataset(train_transform, args.train_image_dir, train_class_num, TRAIN_PIC_NUM) 
+    train_set = trainDataset(train_transform, args.train_image_dir, train_class_num, TRAIN_PIC_NUM) 
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch, num_workers=6)
 
     #load test data
-    test_set = AiCupDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
+    test_set = trainDataset(test_transform, args.test_image_dir, TEST_CLASS_NUM, TEST_PIC_NUM)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch, num_workers=6)
 
 
@@ -145,27 +142,7 @@ if __name__ == '__main__':
             dist_matrix = compute_dist_sqr(feature_set)
             
             knn_idx = torch.argsort(dist_matrix, descending=True, dim=1)
-            
-            if epoch == epochs-1:
-                f = open('knn_index.txt', 'w')
-                #record knn_index and label
-                for i in range(len(dist_matrix)):
-                    target = int(label_list[i])
-                    f.write(f'{target}\n')
-                    label_count = dict()  
-                    for j in range(11):
-                        f.write(f'{knn_idx[i][j]:6},')
-                    f.write('\n') 
-                    for j in range(11):
-                        label = int(label_list[knn_idx[i][j]])
-                        f.write(f'{label:6},')
-                    f.write('\n')
-                    for j in range(11):
-                        d = dist_matrix[i][knn_idx[i][j]].item()
-                        f.write(f'{d:6.3f},')
-                    f.write(f'\n--------------------------------------------------------------------')
-
-
+                       
             #find top k
             for i in range(len(KNN)):
                 acc = top_k(KNN[i],dist_matrix,label_list, knn_idx)
