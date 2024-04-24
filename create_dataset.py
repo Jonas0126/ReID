@@ -86,7 +86,7 @@ class testDataset(Dataset):
 
         #filter categories with fewer images than
         self.image_file_list = self.filt_image_files(image_files, img_dir) 
-        if class_num is not None:
+        if class_num is not None and class_num <= len(self.image_file_list):
             self.class_num = class_num
         else:
             self.class_num = len(self.image_file_list)
