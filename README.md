@@ -40,6 +40,7 @@ images
 在VeRIWild上的測試結果能在rank 1達到89%準確率。
 而在AICUP上的測試結果在rank 1僅能達到68%準確率。
 ## 使用方式
+[dataset下載](https://drive.google.com/drive/folders/1MhmSHuEQSpRSL2NUNwYp7YwtVBDA2xSo?usp=sharing)
 若想要訓練model，需要先在目錄中建立兩個資料夾分別為trained_result和test_result，訓練結果將存放至trained_result，測試結果則存放到test_result，可以使用以下指令：
 ```
 python train_tripletloss.py -lr 0.001 −w 256 -e 50 -b 32 −m 0.3 --model_name ResNet101 --datasets VeRIWild
